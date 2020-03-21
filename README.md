@@ -1,15 +1,18 @@
 # yourip
 *find your public ip & hostname with docker.*
 
-Install
+And, this may also be a good Drone CI demo.
+
+## Quick start 
+### Install
 ```shell
 go get github.com/otokaze/yourip
 ```
-Starting
+### Starting
 ```shell
-yourip --http // -h show help message.
+yourip --http // use -h show help message.
 ```
-OR Docker Running
+### OR Docker
 ```shell
 docker run --rm -p 80:80 otokaze/yourip
 ```

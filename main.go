@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -14,8 +15,19 @@ var (
 	httpOn bool
 	port   int
 	data   []string
+	resp   Response
 	err    error
 )
+
+type Response struct {
+	Code uint8  `json:"code"`
+	Msg  string `json:"msg"`
+	Data struct {
+		ClientIP string `json:"client_ip"`
+		ServerIP string `json:"server_ip"`
+		Hostname string `json:"hostname"`
+	} `json:"data"`
+}
 
 func init() {
 	flag.BoolVar(&httpOn, "http", false, "Start HTTP Server.")
@@ -24,24 +36,24 @@ func init() {
 }
 
 func main() {
-	var host string
-	if host, err = os.Hostname(); err != nil {
+	if resp.Data.Hostname, err = os.Hostname(); err != nil {
 		log.Printf("os.Hostname() error(%v)", err)
 		return
 	}
-	var resp *http.Response
-	if resp, err = http.Get("http://ifconfig.co/ip"); err != nil {
+	var ipResp *http.Response
+	if ipResp, err = http.Get("http://ifconfig.co/ip"); err != nil {
 		log.Printf("http.Get(ifconfig.co/ip) error(%v)", err)
 		return
 	}
 	var bs []byte
-	if bs, err = ioutil.ReadAll(resp.Body); err != nil {
+	if bs, err = ioutil.ReadAll(ipResp.Body); err != nil {
 		log.Printf("ioutil.ReadAll() error(%v)", err)
 		return
 	}
+	resp.Data.ServerIP = strings.TrimSpace(string(bs))
 	data = []string{
-		fmt.Sprintf("ServerIP: %s", strings.TrimSpace(string(bs))),
-		fmt.Sprintf("Hostname: %s", host),
+		fmt.Sprintf("ServerIP: %s", resp.Data.ServerIP),
+		fmt.Sprintf("Hostname: %s", resp.Data.Hostname),
 	}
 	if httpOn {
 		http.HandleFunc("/", handleRoot)
@@ -51,10 +63,19 @@ func main() {
 	fmt.Println(strings.Join(data, "\n"))
 }
 
-func handleRoot(resp http.ResponseWriter, req *http.Request) {
-	var data = append([]string{fmt.Sprintf("ClientIP: %s", req.RemoteAddr)}, data...)
-	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if _, err = resp.Write([]byte(strings.Join(data, "\n"))); err != nil {
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	var bs []byte
+	if r.Form.Get("format") == "json" {
+		resp.Data.ClientIP = r.RemoteAddr
+		bs, _ = json.Marshal(&resp)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	} else {
+		clientIP := fmt.Sprintf("ClientIP: %s", r.RemoteAddr)
+		bs = []byte(strings.Join(append([]string{clientIP}, data...), "\n"))
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	}
+	if _, err = w.Write(bs); err != nil {
 		log.Printf("resp.Write() error(%v)", err)
 		return
 	}
